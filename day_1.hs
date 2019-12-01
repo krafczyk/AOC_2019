@@ -10,7 +10,7 @@ fuelConvert mass = (mass `div` 3) - 2
 
 fuelSeries :: Int -> [Int] -> [Int]
 fuelSeries mass xs
-    | mass <= 6 = xs -- All fuel less than or equal to 6 requires no more fuel.
+    | fuelConvert mass <= 0 = xs -- All fuel less than or equal to 6 requires no more fuel.
     | otherwise = let next_fuel = fuelConvert mass in
                   fuelSeries next_fuel (next_fuel:xs)
 
