@@ -8,14 +8,18 @@ import Data.List.Split
 
 argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use for input", 1) ]
 
+setNounVerb :: Int -> Int -> [Int] -> [Int]
+setNounVerb n v state = U.replaceNth 1 n $ U.replaceNth 2 v $ state
+
 fileHandler handle = do
                      file_data <- hGetContents handle
                      let intcode_prog = map (\x -> read x :: Int) $ splitOn "," (lines file_data !! 0)
-                     let task_1_prog = U.replaceNth 1 12 $ U.replaceNth 2 2 intcode_prog
-                         final_state = (take 1 $ reverse $ U.takeWhileInclusive Asm.advanceCondition $ iterate (>>=Asm.advanceState) (Just (0, task_1_prog))) !! 0
-                     case final_state of
+                     let task_1_prog = setNounVerb 12 2 intcode_prog
+                     case Asm.runProgram task_1_prog of
                          Nothing -> putStrLn "Task 1 failed!"
-                         Just (idx, state) -> putStrLn $ "Task 1: " ++ show (state !! 0)
+                         Just val -> putStrLn $ "Task 1: " ++ show val
+                     let noun_verb_pairs = [(n,v) | n <- take 100 [0..], v <- take 100 [0..]]
+                     return ()
 
 handleFile :: String -> IO ()
 handleFile input_filepath = withFile input_filepath ReadMode fileHandler

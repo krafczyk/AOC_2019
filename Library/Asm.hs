@@ -47,3 +47,10 @@ advanceState (idx, state)
 advanceCondition :: Maybe IntcodeState -> Bool
 advanceCondition Nothing = False
 advanceCondition (Just (idx, state)) = if (state !! idx) == 99 then False else True
+
+-- Run the program and get output if it terminates properly
+runProgram :: [Int] -> Maybe Int
+runProgram state = let final_val = (take 1 $ reverse $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Just (0, state))) !! 0 in
+                   case final_val of
+                       Nothing -> Nothing
+                       Just (_,final_state) -> Just (final_state !! 0)
