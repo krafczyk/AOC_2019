@@ -11,6 +11,13 @@ argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use f
 setNounVerb :: Int -> Int -> [Int] -> [Int]
 setNounVerb n v state = U.replaceNth 1 n $ U.replaceNth 2 v $ state
 
+runProgramWNV :: (Int,Int) -> [Int] -> Maybe Int
+runProgramWNV (n,v) state = Asm.runProgram $ setNounVerb n v state
+
+reportResult :: ((Int, Int), Maybe Int) -> String
+reportResult (_,Nothing) = "Task 2 Failed"
+reportResult ((n,v), k) = "Task 2: " ++ show (100*n+v)
+
 fileHandler handle = do
                      file_data <- hGetContents handle
                      let intcode_prog = map (\x -> read x :: Int) $ splitOn "," (lines file_data !! 0)
@@ -19,7 +26,9 @@ fileHandler handle = do
                          Nothing -> putStrLn "Task 1 failed!"
                          Just val -> putStrLn $ "Task 1: " ++ show val
                      let noun_verb_pairs = [(n,v) | n <- take 100 [0..], v <- take 100 [0..]]
-                     return ()
+                         results = U.takeWhileInclusive (\(_,v) -> v /= Just 19690720) $ map (\x -> (x, runProgramWNV x intcode_prog)) noun_verb_pairs
+                         target_result = (take 1 $ reverse $ results) !! 0
+                     putStrLn $ reportResult target_result
 
 handleFile :: String -> IO ()
 handleFile input_filepath = withFile input_filepath ReadMode fileHandler
