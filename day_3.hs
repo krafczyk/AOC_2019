@@ -53,10 +53,6 @@ solveProblem a b = do
                    putStrLn $ "Task 1: " ++ show closest_int_dist
                    let dists = map (\int -> (distToInt int a_list,distToInt int b_list)) $ int_list
                        closest_walk_dist = minimum $ map (uncurry (+)) dists
-                   --putStrLn $ show $ head int_list
-                   --putStrLn $ show $ reverse a_points
-                   --putStrLn $ show $ distToInt (head int_list) (reverse a_points)
-                   --putStrLn $ show $ dists
                    putStrLn $ "Task 2: " ++ show closest_walk_dist
 
 fileHandler handle = do
