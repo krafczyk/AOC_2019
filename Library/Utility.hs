@@ -9,3 +9,8 @@ replaceNth n newVal (x:xs)
 takeWhileInclusive :: (a -> Bool) -> [a] -> [a]
 takeWhileInclusive _ [] = []
 takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs else []
+
+readMaybe :: Read a => String -> Maybe a
+readMaybe s = case reads s of
+                  [(val, "")] -> Just val
+                  _ -> Nothing
