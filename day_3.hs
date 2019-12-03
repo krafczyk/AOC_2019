@@ -37,15 +37,27 @@ applyMove (MoveDown v) ((x,y):ps) = (x,y-v):(applyMove (MoveDown (v-1)) ((x,y):p
 distManhattan :: Point -> Int
 distManhattan (x,y) = (abs x)+(abs y)
 
+distToInt :: Point -> [Point] -> Int
+distToInt p points = length $ takeWhile (p/=) points
+
 solveProblem :: [Move] -> [Move] -> IO ()
 solveProblem a b = do
                    let a_points = foldl (\acc x -> applyMove x acc) [(0,0)] a
                        b_points = foldl (\acc x -> applyMove x acc) [(0,0)] b
+                       a_list = reverse a_points
+                       b_list = reverse b_points
                        a_set = S.fromList a_points
                        b_set = S.fromList b_points
                        int_list = S.toList $ S.delete (0,0) $ S.intersection a_set b_set
                        closest_int_dist = minimum $ map distManhattan int_list
                    putStrLn $ "Task 1: " ++ show closest_int_dist
+                   let dists = map (\int -> (distToInt int a_list,distToInt int b_list)) $ int_list
+                       closest_walk_dist = minimum $ map (uncurry (+)) dists
+                   --putStrLn $ show $ head int_list
+                   --putStrLn $ show $ reverse a_points
+                   --putStrLn $ show $ distToInt (head int_list) (reverse a_points)
+                   --putStrLn $ show $ dists
+                   putStrLn $ "Task 2: " ++ show closest_walk_dist
 
 fileHandler handle = do
                      file_data <- hGetContents handle
