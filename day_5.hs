@@ -10,7 +10,6 @@ argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use f
 fileHandler handle = do
                      file_data <- hGetContents handle
                      let program = map (\x -> read x :: Int) $ splitOn "," $ head $ lines file_data
-                     --mapM_ putStrLn $ map (\(n, result) -> (show n) ++ ": " ++ (show result)) $ zip [0..] (Asm.runProgramDebug 10 [1] program)
                      case Asm.runProgram [1] program of
                          Left msg -> putStrLn $ "Running program for task 1 failed. (" ++ (show msg) ++ ")"
                          Right (_, outputs, _, _) -> let rev_out = reverse outputs
@@ -24,6 +23,10 @@ fileHandler handle = do
                                                               putStrLn "Tests Failed!"
                                                               putStrLn $ show rev_out
                                                               putStrLn $ show test_codes
+                     case Asm.runProgram [5] program of
+                         Left msg -> putStrLn $ "Running program for task 2 failed. (" ++ (show msg) ++ ")"
+                         Right (_, outputs, _, _) -> putStrLn $ "Task 2: " ++ (show $ head outputs)
+                     --putStrLn $ show $ Asm.runProgram [-20] program
 
 handleFile :: String -> IO ()
 handleFile input_filepath = withFile input_filepath ReadMode fileHandler
