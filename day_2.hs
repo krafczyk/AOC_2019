@@ -12,7 +12,7 @@ setNounVerb :: Int -> Int -> [Int] -> [Int]
 setNounVerb n v state = U.replaceNth 1 n $ U.replaceNth 2 v $ state
 
 runProgramWNV :: (Int,Int) -> [Int] -> Asm.ComputeMonad Int
-runProgramWNV (n,v) state = case Asm.runProgram $ setNounVerb n v state of
+runProgramWNV (n,v) state = case Asm.runProgram [] $ setNounVerb n v state of
                                 Left x -> Left x
                                 Right (_, _, _, state) -> Right (state !! 0)
 
@@ -24,7 +24,7 @@ fileHandler handle = do
                      file_data <- hGetContents handle
                      let intcode_prog = map (\x -> read x :: Int) $ splitOn "," (lines file_data !! 0)
                      let task_1_prog = setNounVerb 12 2 intcode_prog
-                     case Asm.runProgram task_1_prog of
+                     case Asm.runProgram [] task_1_prog of
                          Left msg -> putStrLn $ "Task 1 failed! msg: " ++ (show msg)
                          Right (_, _, _, state) -> putStrLn $ "Task 1: " ++ (show $ head state)
                      let noun_verb_pairs = [(n,v) | n <- take 100 [0..], v <- take 100 [0..]]
