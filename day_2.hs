@@ -11,11 +11,11 @@ argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use f
 setNounVerb :: Int -> Int -> [Int] -> [Int]
 setNounVerb n v state = U.replaceNth 1 n $ U.replaceNth 2 v $ state
 
-runProgramWNV :: (Int,Int) -> [Int] -> Maybe Int
+runProgramWNV :: (Int,Int) -> [Int] -> Asm.ComputeMonad Int
 runProgramWNV (n,v) state = Asm.runProgram $ setNounVerb n v state
 
-reportResult :: ((Int, Int), Maybe Int) -> String
-reportResult (_,Nothing) = "Task 2 Failed"
+reportResult :: ((Int, Int), Asm.ComputeMonad Int) -> String
+reportResult (_,Left x) = "Task 2 Failed. msg: " ++ (show x)
 reportResult ((n,v), k) = "Task 2: " ++ show (100*n+v)
 
 fileHandler handle = do
@@ -23,10 +23,10 @@ fileHandler handle = do
                      let intcode_prog = map (\x -> read x :: Int) $ splitOn "," (lines file_data !! 0)
                      let task_1_prog = setNounVerb 12 2 intcode_prog
                      case Asm.runProgram task_1_prog of
-                         Nothing -> putStrLn "Task 1 failed!"
-                         Just val -> putStrLn $ "Task 1: " ++ show val
+                         Left msg -> putStrLn $ "Task 1 failed! msg: " ++ (show msg)
+                         Right val -> putStrLn $ "Task 1: " ++ show val
                      let noun_verb_pairs = [(n,v) | n <- take 100 [0..], v <- take 100 [0..]]
-                         results = U.takeWhileInclusive (\(_,v) -> v /= Just 19690720) $ map (\x -> (x, runProgramWNV x intcode_prog)) noun_verb_pairs
+                         results = U.takeWhileInclusive (\(_,v) -> v /= (Right 19690720)) $ map (\x -> (x, runProgramWNV x intcode_prog)) noun_verb_pairs
                          target_result = (take 1 $ reverse $ results) !! 0
                      putStrLn $ reportResult target_result
 
