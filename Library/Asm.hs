@@ -80,6 +80,14 @@ addInst a b = a+b
 multInst :: Inst21
 multInst a b = a*b
 
+-- less than instruction implementation
+lessInst :: Inst21
+lessInst a b = if a < b then 1 else 0
+
+-- equals instruction implementation
+equalsInst :: Inst21
+equalsInst a b = if a == b then 1 else 0
+
 -- Utility function to apply a function with 2 arguments and one output
 applyInst21 :: Inst21 -> IntcodeMode -> Int -> [Int] -> ComputeMonad [Int]
 applyInst21 func mode idx state
@@ -140,6 +148,30 @@ doOutput mode (inputs, outputs, idx, state)
           par1mode = getPar1Mode mode
           loc = state !! (idx+1)
 
+-- jump instructions
+
+jumpHelper :: Bool -> Int -> IntcodeState -> ComputeMonad IntcodeState
+jumpHelper cond dest (inputs, outputs, idx, state) = if cond
+                           then Right (inputs, outputs, dest, state)
+                           else Right (inputs, outputs, idx+3, state)
+
+jumpCond :: IntcodeMode -> (Int -> Bool) -> IntcodeState -> ComputeMonad IntcodeState
+jumpCond mode cond allstate@(inputs, outputs, idx, state)
+    | not $ withinBounds (idx+2) state_length = buildBoundsError (idx+2) state_length
+    | (par1mode == 0) && (not $ withinBounds a state_length) = buildBoundsError a state_length
+    | (par2mode == 0) && (not $ withinBounds b state_length) = buildBoundsError b state_length
+    | (par1mode == 0) && (par2mode == 0) = jumpHelper (cond av) bv allstate
+    | (par1mode == 0) = jumpHelper (cond av) b allstate
+    | (par2mode == 0) = jumpHelper (cond a) bv allstate
+    | otherwise = jumpHelper (cond a) b allstate
+    where state_length = length state
+          par1mode = getPar1Mode mode
+          par2mode = getPar2Mode mode
+          a = state !! (idx+1)
+          b = state !! (idx+2)
+          av = state !! a
+          bv = state !! b
+
 -- Advance state function
 advanceState :: IntcodeState -> ComputeMonad IntcodeState
 advanceState allstate@(inputs, outputs, idx, state)
@@ -147,6 +179,10 @@ advanceState allstate@(inputs, outputs, idx, state)
     | opcode == 2 = advanceStateFunc21 multInst mode allstate -- Multiplication
     | opcode == 3 = getInput mode allstate -- Input handling
     | opcode == 4 = doOutput mode allstate -- Output handling
+    | opcode == 5 = jumpCond mode (/=0) allstate -- jumpIfTrue
+    | opcode == 6 = jumpCond mode (==0) allstate -- jumpIfFalse
+    | opcode == 7 = advanceStateFunc21 lessInst mode allstate -- less than
+    | opcode == 8 = advanceStateFunc21 equalsInst mode allstate -- equal to
     | opcode == 99 = Right allstate -- This is the exit condition
     | otherwise = throwError (UnsupportedInstruction opcode)
     where opmode = state !! idx :: IntcodeOpmode
