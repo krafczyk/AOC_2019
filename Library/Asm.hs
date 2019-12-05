@@ -8,7 +8,11 @@ data ComputeError = MemoryOverrun Int -- Attempted to access memory beyond the e
                   | MemoryUnderrun Int -- Attempted to access memory before the start of memory
                   | UnsupportedOutputMode Int -- Attempted to use an unsupported output mode
                   | BuildBoundsErrorUnexpected Int -- buildBounds Error used with value within bounds
-                  | UnsupportedInstruction Int deriving (Eq)
+                  | UnsupportedInstruction Int 
+                  | NoInputAvailable
+                  | UnsupportedInputMode Int -- Attempted to use an unsupported Input mode.
+                  | UnhandledOutputMode Int
+                  deriving (Eq)
 
 instance Show ComputeError where
     show (MemoryOverrun idx) = "Attempted to access out memory beyond the end: " ++ (show idx)
@@ -16,6 +20,9 @@ instance Show ComputeError where
     show (UnsupportedOutputMode mode) = "Tried to use non-position mode " ++ (show mode) ++ " with the output parameter"
     show (BuildBoundsErrorUnexpected idx) = "Used buildBoundsError with value within bounds! " ++ (show idx)
     show (UnsupportedInstruction opcode) = "Opcode " ++ (show opcode) ++ " is unsupported"
+    show NoInputAvailable = "No input available"
+    show (UnsupportedInputMode mode) = "Unsupported input mode " ++ (show mode)
+    show (UnhandledOutputMode mode) = "Unhandled output mode " ++ (show mode)
 
 type ComputeMonad = Either ComputeError
 
@@ -55,7 +62,7 @@ withinBounds idx len = if (idx >= len)
                                then False
                                else True
 
-buildBoundsError :: Int -> Int -> ComputeMonad [Int]
+buildBoundsError :: Int -> Int -> ComputeMonad a
 buildBoundsError idx len = if (idx >= len)
                                then throwError (MemoryOverrun idx)
                                else if (idx < 0)
@@ -107,13 +114,39 @@ advanceStateFunc21 func mode (inputs, outputs, idx, state) = let nextState = app
                                                Left x -> Left x
                                                Right nState -> Right (inputs, outputs, idx+4, nState)
 
+-- Handle input cmd
+getInput :: IntcodeMode -> IntcodeState -> ComputeMonad IntcodeState
+getInput _ ([], _, _, _) = throwError NoInputAvailable
+getInput mode (inputs, outputs, idx, state)
+    | par1mode /= 0 = throwError (UnsupportedInputMode par1mode)
+    | not $ withinBounds (idx+1) state_length = buildBoundsError (idx+1) state_length
+    | not $ withinBounds loc state_length = buildBoundsError loc state_length
+    | otherwise = let nState = U.replaceNth loc (head inputs) state in
+                  Right (drop 1 inputs, outputs, idx+2, nState)
+    where state_length = length state
+          par1mode = getPar1Mode mode
+          loc = state !! (idx+1)
+
+
+-- Handle output cmd
+doOutput :: IntcodeMode -> IntcodeState -> ComputeMonad IntcodeState
+doOutput mode (inputs, outputs, idx, state)
+    | not $ withinBounds (idx+1) state_length = buildBoundsError (idx+1) state_length
+    | (par1mode == 0) && (not $ withinBounds loc state_length) = buildBoundsError loc state_length
+    | par1mode == 0 = Right (inputs, outputs ++ [state !! loc], idx+2, state)
+    | par1mode == 1 = Right (inputs, outputs ++ [loc], idx+2, state)
+    | otherwise = throwError (UnhandledOutputMode par1mode)
+    where state_length = length state
+          par1mode = getPar1Mode mode
+          loc = state !! (idx+1)
+
 -- Advance state function
 advanceState :: IntcodeState -> ComputeMonad IntcodeState
 advanceState allstate@(inputs, outputs, idx, state)
     | opcode == 1 = advanceStateFunc21 addInst mode allstate -- Addition
     | opcode == 2 = advanceStateFunc21 multInst mode allstate -- Multiplication
---    | opcode == 3 = -- Input
---    | opcode == 4 = -- Output
+    | opcode == 3 = getInput mode allstate -- Input handling
+    | opcode == 4 = doOutput mode allstate -- Output handling
     | opcode == 99 = Right allstate -- This is the exit condition
     | otherwise = throwError (UnsupportedInstruction opcode)
     where opmode = state !! idx :: IntcodeOpmode
@@ -126,5 +159,8 @@ advanceCondition (Left _) = False
 advanceCondition (Right (_, _, idx, state)) = if (state !! idx) == 99 then False else True
 
 -- Run the program and get output if it terminates properly
-runProgram :: [Int] -> ComputeMonad IntcodeState
-runProgram state = head $ reverse $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right ([], [], 0, state))
+runProgram :: [Int] -> [Int] -> ComputeMonad IntcodeState
+runProgram inputs state = head $ reverse $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right (inputs, [], 0, state))
+
+runProgramDebug :: Int -> [Int] -> [Int] -> [ComputeMonad IntcodeState]
+runProgramDebug num_steps inputs state = take num_steps $ iterate (>>=advanceState) (Right (inputs, [], 0, state))
