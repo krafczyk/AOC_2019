@@ -20,7 +20,7 @@ instance Show ComputeError where
 type ComputeMonad = Either ComputeError
 
 -- The intcode state definition
-type IntcodeState = (Int, [Int])
+type IntcodeState = ([Int], [Int], Int, [Int])
 
 -- The intcode opmode type
 type IntcodeOpmode = Int
@@ -31,6 +31,7 @@ type IntcodeOpcode = Int
 -- The intcode mode type
 type IntcodeMode = Int
 
+-- Helper functions to get opcodes and modes
 getOpcode :: IntcodeOpmode -> IntcodeOpcode
 getOpcode opmode = opmode `mod` 100
 
@@ -46,17 +47,7 @@ getPar2Mode mode = (mode `div` 10) `mod` 10
 getPar3Mode :: IntcodeMode -> Int
 getPar3Mode mode = (mode `div` 100) `mod` 10
 
--- An intcode function taking 2 arguments giving one output
-type Inst21 = Int -> Int -> Int
-
--- Add instruction implementation
-addInst :: Inst21
-addInst a b = a+b
-
--- Mult instruction implementation
-multInst :: Inst21
-multInst a b = a*b
-
+-- Functions related to access of the program memory/state
 withinBounds :: Int -> Int -> Bool
 withinBounds idx len = if (idx >= len)
                            then False
@@ -70,6 +61,17 @@ buildBoundsError idx len = if (idx >= len)
                                else if (idx < 0)
                                    then throwError (MemoryUnderrun idx)
                                    else throwError (BuildBoundsErrorUnexpected idx)
+
+-- An intcode function taking 2 arguments giving one output
+type Inst21 = Int -> Int -> Int
+
+-- Add instruction implementation
+addInst :: Inst21
+addInst a b = a+b
+
+-- Mult instruction implementation
+multInst :: Inst21
+multInst a b = a*b
 
 -- Utility function to apply a function with 2 arguments and one output
 applyInst21 :: Inst21 -> IntcodeMode -> Int -> [Int] -> ComputeMonad [Int]
@@ -100,17 +102,19 @@ applyInst21 func mode idx state
 
 -- Advance state helper for 2 argument 1 output instructions
 advanceStateFunc21 :: Inst21 -> IntcodeMode -> IntcodeState -> ComputeMonad IntcodeState
-advanceStateFunc21 func mode (idx, state) = let nextState = applyInst21 func mode idx state in
+advanceStateFunc21 func mode (inputs, outputs, idx, state) = let nextState = applyInst21 func mode idx state in
                                            case nextState of
                                                Left x -> Left x
-                                               Right nState -> Right (idx+4, nState)
+                                               Right nState -> Right (inputs, outputs, idx+4, nState)
 
 -- Advance state function
 advanceState :: IntcodeState -> ComputeMonad IntcodeState
-advanceState (idx, state)
-    | opcode == 1 = advanceStateFunc21 addInst mode (idx,state)
-    | opcode == 2 = advanceStateFunc21 multInst mode (idx,state)
-    | opcode == 99 = Right (idx, state) -- This is the exit condition
+advanceState allstate@(inputs, outputs, idx, state)
+    | opcode == 1 = advanceStateFunc21 addInst mode allstate -- Addition
+    | opcode == 2 = advanceStateFunc21 multInst mode allstate -- Multiplication
+--    | opcode == 3 = -- Input
+--    | opcode == 4 = -- Output
+    | opcode == 99 = Right allstate -- This is the exit condition
     | otherwise = throwError (UnsupportedInstruction opcode)
     where opmode = state !! idx :: IntcodeOpmode
           opcode = getOpcode opmode
@@ -119,11 +123,8 @@ advanceState (idx, state)
 -- Handle Nothing crashes and halt conditions
 advanceCondition :: ComputeMonad IntcodeState -> Bool
 advanceCondition (Left _) = False
-advanceCondition (Right (idx, state)) = if (state !! idx) == 99 then False else True
+advanceCondition (Right (_, _, idx, state)) = if (state !! idx) == 99 then False else True
 
 -- Run the program and get output if it terminates properly
-runProgram :: [Int] -> ComputeMonad Int
-runProgram state = let final_val = (take 1 $ reverse $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right (0, state))) !! 0 in
-                   case final_val of
-                       Left x -> Left x
-                       Right (_,final_state) -> Right (final_state !! 0)
+runProgram :: [Int] -> ComputeMonad IntcodeState
+runProgram state = head $ reverse $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right ([], [], 0, state))
