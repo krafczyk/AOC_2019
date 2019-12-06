@@ -7,7 +7,7 @@ type ArgName = String
 type ArgHandles = [String]
 type ArgHelptext = String
 type EasyArgDefinitions = (String, [String], String, Int)
-type ArgMap Map.Map String [[String]]
+type ArgMap = Map.Map String [[String]]
 data ArgDefinitions = ArgDefinitions { name :: ArgName, handles :: ArgHandles, helpText :: ArgHelptext, numArgs :: Int } deriving (Show)
 data ProgramArguments = ProgramArguments { progTitle :: String, argDefs :: [ArgDefinitions] } deriving (Show)
 

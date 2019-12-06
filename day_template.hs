@@ -9,10 +9,10 @@ fileHandler argMap handle = do
                             file_data <- hGetContents handle
                             putStrLn file_data -- Read problem data here
 
-handleFile :: String -> ArgMap -> IO ()
+handleFile :: String -> AP.ArgMap -> IO ()
 handleFile input_filepath argMap = withFile input_filepath ReadMode (fileHandler argMap)
 
-handleArguments :: ArgMap -> IO ()
+handleArguments :: AP.ArgMap -> IO ()
 handleArguments argMap = case Map.lookup "input_filepath" argMap of
                              Just x -> let input_filepath = (reverse x !! 0) !! 0 in
                                        handleFile input_filepath argMap
