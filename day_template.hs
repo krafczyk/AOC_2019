@@ -5,6 +5,7 @@ import qualified Library.ArgParser as AP
 
 argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use for input", 1) ]
 
+fileHandler :: AP.ArgMap -> System.IO.Handle -> IO ()
 fileHandler argMap handle = do
                             file_data <- hGetContents handle
                             putStrLn file_data -- Read problem data here
