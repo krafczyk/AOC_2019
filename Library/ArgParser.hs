@@ -7,6 +7,7 @@ type ArgName = String
 type ArgHandles = [String]
 type ArgHelptext = String
 type EasyArgDefinitions = (String, [String], String, Int)
+type ArgMap Map.Map String [[String]]
 data ArgDefinitions = ArgDefinitions { name :: ArgName, handles :: ArgHandles, helpText :: ArgHelptext, numArgs :: Int } deriving (Show)
 data ProgramArguments = ProgramArguments { progTitle :: String, argDefs :: [ArgDefinitions] } deriving (Show)
 
@@ -81,7 +82,7 @@ doArgsSupport argDef idx args = let num_req = numArgs argDef in
                                     then True
                                     else False
 
-parseArguments :: ProgramArguments -> [String] -> Either String (Map.Map String [[String]])
+parseArguments :: ProgramArguments -> [String] -> Either String ArgMap
 parseArguments progArgs args = let name_handle_pairs = map (\x -> (name x, handles x)) $ filter (\x -> name x /= "help") $ argDefs progArgs
                                    name_idx_pairs = map (\(name, handles) -> (name, getNamePositions handles args)) name_handle_pairs
                                    support_check_a = map (\(name, idxs) -> (name, map (\idx -> doArgsSupport (getArgByName progArgs name) idx args) idxs )) name_idx_pairs
