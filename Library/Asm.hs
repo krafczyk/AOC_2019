@@ -26,8 +26,14 @@ instance Show ComputeError where
 
 type ComputeMonad = Either ComputeError
 
+-- The Intcode basic types
+type IntcodeProgram = [Int]
+type IntcodeInputs = [Int]
+type IntcodeOutputs = [Int]
+type IntcodePtr = Int
+
 -- The intcode state definition
-type IntcodeState = ([Int], [Int], Int, [Int])
+type IntcodeState = (IntcodeInputs, IntcodeOutputs, IntcodePtr, IntcodeProgram)
 
 -- The intcode opmode type
 type IntcodeOpmode = Int
