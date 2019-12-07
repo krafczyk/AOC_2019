@@ -200,9 +200,16 @@ advanceCondition :: ComputeMonad IntcodeState -> Bool
 advanceCondition (Left _) = False
 advanceCondition (Right (_, _, idx, state)) = if (state !! idx) == 99 then False else True
 
+advanceConditionWaitInput :: ComputeMonad IntcodeState -> Bool
+advanceConditionWaitInput (Left _) = False
+advanceConditionWaitInput (Right (input, output, idx, state)) = if ((state !! idx) == 99) || ((getOpcode (state !! idx) == 3) && (length input == 0)) then False else True
+
 -- Run the program and get output if it terminates properly
 runProgram :: [Int] -> [Int] -> ComputeMonad IntcodeState
-runProgram inputs state = head $ reverse $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right (inputs, [], 0, state))
+runProgram inputs state = last $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right (inputs, [], 0, state))
+
+runProgramTillNeedInput :: IntcodeState -> ComputeMonad IntcodeState
+runProgramTillNeedInput init_state = last $ U.takeWhileInclusive advanceConditionWaitInput $ iterate (>>=advanceState) (Right init_state)
 
 runProgramDebug :: Int -> [Int] -> [Int] -> [ComputeMonad IntcodeState]
 runProgramDebug num_steps inputs state = take num_steps $ iterate (>>=advanceState) (Right (inputs, [], 0, state))
