@@ -13,18 +13,21 @@ type AmplifierProgram = (Int, [Asm.IntcodeState])
 
 initAmplifierProgram :: Asm.IntcodeProgram -> [Int] -> Int -> AmplifierProgram
 initAmplifierProgram program theSequ input = (input, ampProg)
-    where ampProg = foldl (\acc x -> acc ++ [([x], [], 0, program)]) [] theSequ
+    where ampProg = foldl (\acc x -> acc ++ [Asm.initState program [x]]) [] theSequ
 
 runAmplifierStep :: (Int, Asm.IntcodeState) -> Asm.ComputeMonad Asm.IntcodeState
-runAmplifierStep (inp, (inputs, outputs, cur_idx, prog_state)) = next_state
-    where next_state = Asm.runProgramTillNeedInput (inputs ++ [inp], outputs, cur_idx, prog_state)
+runAmplifierStep (inp, state) = next_state
+    where inputs = Asm.getInput state
+          next_state = Asm.runProgramTillNeedInput $ state { Asm.getInput= inputs ++ [inp] }
 
 runAmplifierFold :: Asm.IntcodeState -> AmplifierProgram -> Asm.ComputeMonad AmplifierProgram
 runAmplifierFold next_prog (inp, old_progs) =
     case next_state of
         Left msg -> Left msg
-        Right (inputs, outputs, cur_idx, new_state) -> let outp = head outputs in
-                                                       Right (outp, old_progs ++ [(inputs, drop 1 outputs, cur_idx, new_state)])
+        Right state ->
+            let outputs = Asm.getOutput state
+                outp = head outputs in
+            Right (outp, old_progs ++ [state { Asm.getOutput=(drop 1 outputs) }])
     where next_state = runAmplifierStep (inp, next_prog)
 
 runAmplifierProgram :: AmplifierProgram -> Asm.ComputeMonad AmplifierProgram
@@ -45,8 +48,11 @@ continueProg :: Asm.ComputeMonad AmplifierProgram -> Bool
 continueProg c_amp_prog =
     case c_amp_prog of
         Left _ -> False
-        Right (_, progs) -> let (_, _, idx, state) = last progs in
-                            if (Asm.getOpcode (state !! idx)) == 99 then False else True
+        Right (_, progs) -> let state = last progs
+                                program = Asm.getProgram state
+                                idx = Asm.getIdx state 
+                                opcode = Asm.getOpcode (program !! idx) in
+                            if opcode == 99 then False else True
 
 runAmplifiersFeedback :: Asm.IntcodeProgram -> [Int] -> Int -> Asm.ComputeMonad Int
 runAmplifiersFeedback program theSequ input = 
