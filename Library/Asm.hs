@@ -118,7 +118,7 @@ prepAction in_state =
         Nothing -> throwError (UnsupportedInstruction opcode)
         Just (num_in, has_out) ->
             if has_out
-                then foldl (prepActionFold) (Right (opcode, [], [(getParMode (num_in+1) opmode, program !! (idx+num_in+1))], in_state)) [1 .. num_in]
+                then foldl (prepActionFold) (Right (opcode, [], [(getParMode opmode (num_in+1), program !! (idx+num_in+1))], in_state)) [1 .. num_in]
                 else foldl (prepActionFold) (Right (opcode, [], [], in_state)) [1 .. num_in]
     where program = getProgram in_state
           idx = getIdx in_state
@@ -147,47 +147,6 @@ lessInst a b = if a < b then 1 else 0
 equalsInst :: Inst21
 equalsInst a b = if a == b then 1 else 0
 
--- Utility function to apply a function with 2 arguments and one output
---applyInst21 :: Inst21 -> IntcodeMode -> Int -> [Int] -> ComputeMonad [Int]
---applyInst21 func mode idx state
---    | par3mode /= 0 = throwError (UnsupportedOutputMode par3mode)
---    | not $ withinBounds (idx+3) = buildBoundsError (idx+3)
---    | (par1mode == 0) && (not $ withinBounds a) = buildBoundsError a
---    | (par2mode == 0) && (not $ withinBounds b) = buildBoundsError b
---    | not $ withinBounds c = buildBoundsError c
---    | ((par1mode == 0) && (par2mode == 0)) = let v = func ai bi in
---                                             Right $ U.replaceNth c v state
---    | (par1mode == 0) = let v = func ai b in
---                        Right $ U.replaceNth c v state
---    | (par2mode == 0) = let v = func a bi in
---                        Right $ U.replaceNth c v state
---    | otherwise = let v = func a b in
---                  Right $ U.replaceNth c v state
---    where state_length = length state
---          par1mode = getPar1Mode mode
---          par2mode = getPar2Mode mode
---          par3mode = getPar3Mode mode
---          a = state !! (idx+1)
---          b = state !! (idx+2)
---          c = state !! (idx+3)
---          ai = state !! a
---          bi = state !! b
---          ci = state !! c
-
--- Advance state helper for 2 argument 1 output instructions
---advanceStateFunc21 :: Inst21 -> IntcodeMode -> IntcodeState -> ComputeMonad IntcodeState
---advanceStateFunc21 func mode in_state =
---    case nextState of
---        Left x -> Left x
---        Right nState -> Right (in_state { getIdx=idx+4,
---                                          getProgram=nState } )
---    where inputs = getInput in_state
---          outputs = getOutput in_state
---          idx = getIdx in_state
---          rel_idx = getRelIdx in_state
---          program = getProgram in_state
---          nextState = applyInst21 func mode idx program
-
 -- Handle input cmd
 doInput :: PrepActionType -> ComputeMonad IntcodeState
 doInput (_, _, outinfo, in_state)
@@ -208,28 +167,13 @@ doOutput (_, in_vals, _, in_state) =
           cur_idx = getIdx in_state
 
 -- jump instructions
-
---jumpHelper :: Bool -> Int -> IntcodeState -> ComputeMonad IntcodeState
---jumpHelper cond dest (inputs, outputs, idx, state) = if cond
---                           then Right (inputs, outputs, dest, state)
---                           else Right (inputs, outputs, idx+3, state)
-
---jumpCond :: IntcodeMode -> (Int -> Bool) -> IntcodeState -> ComputeMonad IntcodeState
---jumpCond mode cond allstate@(inputs, outputs, idx, state)
---    | not $ withinBounds (idx+2) = buildBoundsError (idx+2)
---    | (par1mode == 0) && (not $ withinBounds a) = buildBoundsError a
---    | (par2mode == 0) && (not $ withinBounds b) = buildBoundsError b
---    | (par1mode == 0) && (par2mode == 0) = jumpHelper (cond av) bv allstate
---    | (par1mode == 0) = jumpHelper (cond av) b allstate
---    | (par2mode == 0) = jumpHelper (cond a) bv allstate
---    | otherwise = jumpHelper (cond a) b allstate
---    where state_length = length state
---          par1mode = getPar1Mode mode
---          par2mode = getPar2Mode mode
---          a = state !! (idx+1)
---          b = state !! (idx+2)
---          av = state !! a
---          bv = state !! b
+jumpCond :: (Int -> Bool) -> PrepActionType -> ComputeMonad IntcodeState
+jumpCond cond (_, vals, outinfo, in_state)
+    | cond a = Right $ in_state { getIdx=b }
+    | otherwise = Right $ in_state { getIdx=idx+3 }
+    where a = head vals
+          b = head $ drop 1 vals
+          idx = getIdx in_state
 
 writeResult :: IntcodeMode -> IntcodePtr -> Int -> IntcodeState -> ComputeMonad IntcodeState
 writeResult mode idx val state
@@ -241,6 +185,8 @@ writeResult mode idx val state
           p_program = growMem idx program        
           r_idx = (getRelIdx state) + idx
           r_program = growMem r_idx program
+          cur_idx = getIdx state
+          opmode = program !! cur_idx
 
 -- Advance state function
 
@@ -254,35 +200,19 @@ advanceStateFunc21 func (_, vals, outinfo, in_state) =
 
 advanceStateHelper :: PrepActionType -> ComputeMonad IntcodeState
 advanceStateHelper inv@(opcode, in_vals, outinfo, in_state)
-    | opcode == 1 = if opmode /= 1101
-                        then advanceStateFunc21 addInst inv
-                        else throwError (EarlyExit $ "opmode match: " ++ (show cur_idx) ++ (show $ take (cur_idx+1) program))
-    | opcode == 2 = advanceStateFunc21 multInst inv
-    | opcode == 3 = doInput inv
-    | opcode == 4 = doOutput inv
+    | opcode == 1 = advanceStateFunc21 addInst inv -- Addition
+    | opcode == 2 = advanceStateFunc21 multInst inv -- Multiplication
+    | opcode == 3 = doInput inv -- Input Handling
+    | opcode == 4 = doOutput inv -- Output Handling
+    | opcode == 5 = jumpCond (/=0) inv
+    | opcode == 6 = jumpCond (==0) inv
+    | opcode == 7 = advanceStateFunc21 lessInst inv -- less than
+    | opcode == 8 = advanceStateFunc21 equalsInst inv -- equal to
     | opcode == 99 = Right in_state
     | otherwise = throwError (EarlyExit "Not finished refactoring (opcode)")
     where program = getProgram in_state
           cur_idx = getIdx in_state
           opmode = program !! cur_idx
-
---advanceState :: IntcodeState -> ComputeMonad IntcodeState
---advanceState state
---    | opcode == 1 = advanceStateFunc21 addInst mode allstate -- Addition
---    | opcode == 2 = advanceStateFunc21 multInst mode allstate -- Multiplication
---    | opcode == 3 = doInput mode allstate -- Input handling
---    | opcode == 4 = doOutput mode allstate -- Output handling
---    | opcode == 5 = jumpCond mode (/=0) allstate -- jumpIfTrue
---    | opcode == 6 = jumpCond mode (==0) allstate -- jumpIfFalse
---    | opcode == 7 = advanceStateFunc21 lessInst mode allstate -- less than
---    | opcode == 8 = advanceStateFunc21 equalsInst mode allstate -- equal to
---    | opcode == 99 = Right state -- This is the exit condition
---    | otherwise = throwError (UnsupportedInstruction opcode)
---    where idx = getIdx state
---        program = getProgram state
---        opmode = program !! idx
---        opcode = getOpcode opmode
---        mode = getMode opmode
 
 advanceState :: IntcodeState -> ComputeMonad IntcodeState
 advanceState state =
