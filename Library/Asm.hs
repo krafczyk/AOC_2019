@@ -175,6 +175,13 @@ jumpCond cond (_, vals, outinfo, in_state)
           b = head $ drop 1 vals
           idx = getIdx in_state
 
+-- Adjust rel idx instruction
+adjustRelIdx :: PrepActionType -> ComputeMonad IntcodeState
+adjustRelIdx (_, vals, _, in_state) = Right $ in_state { getIdx=idx+2, getRelIdx=rel_idx+val }
+    where idx = getIdx in_state
+          rel_idx = getRelIdx in_state
+          val = head vals
+
 writeResult :: IntcodeMode -> IntcodePtr -> Int -> IntcodeState -> ComputeMonad IntcodeState
 writeResult mode idx val state
     | mode == 0 && idx < 0 = throwError (MemoryUnderrun idx)
@@ -208,8 +215,9 @@ advanceStateHelper inv@(opcode, in_vals, outinfo, in_state)
     | opcode == 6 = jumpCond (==0) inv
     | opcode == 7 = advanceStateFunc21 lessInst inv -- less than
     | opcode == 8 = advanceStateFunc21 equalsInst inv -- equal to
+    | opcode == 9 = adjustRelIdx inv
     | opcode == 99 = Right in_state
-    | otherwise = throwError (EarlyExit "Not finished refactoring (opcode)")
+    | otherwise = throwError (UnsupportedInstruction opcode)
     where program = getProgram in_state
           cur_idx = getIdx in_state
           opmode = program !! cur_idx
