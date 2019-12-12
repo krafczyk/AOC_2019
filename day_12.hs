@@ -118,6 +118,66 @@ applyTimeStep2 (cur, past) = (next, Set.insert cur past)
 isRepetition :: (Planets,Set.Set Planets) -> Bool
 isRepetition (cur, past) = Set.member cur past
 
+coordSeparate :: [Vector] -> ([Int],[Int],[Int])
+coordSeparate init_ps = (xs, ys, zs)
+    where xs = map (gX) init_ps
+          ys = map (gY) init_ps
+          zs = map (gZ) init_ps
+
+addList :: [Int] -> [Int] -> [Int]
+addList as bs = map (uncurry (+)) $ zip as bs
+
+advanceState :: ([Int], [Int]) -> ([Int], [Int])
+advanceState (ps, vs) = (new_p, new_v)
+    where pwi = zip [0..] ps
+          dv = foldr (\(id1,p1) acc -> (sum $ map (gravDiff1 p1) $ map (snd) $ filter (\(id2,_) -> id1 /= id2) pwi):acc ) [] pwi
+          new_v = addList vs dv
+          new_p = addList ps new_v
+
+advanceState2 :: (([Int], [Int]), Set.Set ([Int],[Int])) -> (([Int], [Int]), Set.Set ([Int],[Int]))
+advanceState2 (cur, past) = (next, Set.insert cur past)
+    where next = advanceState cur
+
+initState :: [Int] -> (([Int],[Int]), Set.Set ([Int],[Int]))
+initState ps = ((ps, iv), Set.empty)
+    where iv = take (length ps) $ repeat 0
+
+measurePeriod :: [Int] -> Int
+measurePeriod ps = Set.size $ snd final_state
+    where init_state = initState ps
+          final_state = head $ dropWhile (\(cur,past) -> Set.notMember cur past) $ iterate (advanceState2) init_state
+
+first :: (a,b,c) -> a
+first (x,_,_) = x
+
+second :: (a,b,c) -> b
+second (_,x,_) = x
+
+third :: (a,b,c) -> c
+third (_,_,x) = x
+
+sieve :: [Int] -> [Int]
+sieve (p:xs) = p:sieve [x | x <- xs, x `mod` p /= 0]
+
+primes :: Int -> [Int]
+primes max = takeWhile (<(max+1)) (2:sieve [3,5..])
+
+factorImp :: [Int] -> Int -> Map.Map Int Int
+factorImp _ 1 = Map.empty
+factorImp fs x = Map.unionWith (+) (Map.singleton fac 1) (factorImp fs (x `div` fac))
+    where fac = head $ [ f | f <- fs, (x `mod` f) == 0 ]
+
+factor :: Int -> Map.Map Int Int
+factor x = factorImp ps x
+    where ps = primes (x+1)
+
+buildNum :: Map.Map Int Int -> Int
+buildNum factors = Map.foldrWithKey (\f n acc -> acc*(f^n)) 1 factors
+
+buildGCD :: [Map.Map Int Int] -> Int
+buildGCD splits = buildNum bare_factors
+    where bare_factors = foldr (\x acc -> Map.unionWith (max) x acc) Map.empty splits 
+
 fileHandler :: AP.ArgMap -> System.IO.Handle -> IO ()
 fileHandler argMap handle = do
                             file_data <- hGetContents handle
@@ -128,8 +188,12 @@ fileHandler argMap handle = do
                                 step_result = head $ drop step $ iterate (applyTimeStep) planets
                                 total_energy = sum $ map (energy) $ map (snd) $ step_result
                             putStrLn $ "Task 1: " ++ (show total_energy)
-                            let rep_state = head $ dropWhile (not . isRepetition) $ iterate (applyTimeStep2) (planets, Set.empty)
-                            putStrLn $ "Task 2: " ++ (show $ Set.size $ snd rep_state)
+                            let sep_coords = coordSeparate planet_ps
+                                fp = measurePeriod $ first sep_coords
+                                sp = measurePeriod $ second sep_coords
+                                tp = measurePeriod $ third sep_coords
+                                period = buildGCD [factor fp, factor sp, factor tp]
+                            putStrLn $ "Task 2: " ++ (show period)
 
 handleFile :: String -> AP.ArgMap -> IO ()
 handleFile input_filepath argMap = withFile input_filepath ReadMode (fileHandler argMap)
