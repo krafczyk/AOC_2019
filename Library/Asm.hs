@@ -253,7 +253,7 @@ runProgram :: IntcodeInputs -> IntcodeProgram -> ComputeMonad IntcodeState
 runProgram inputs state = head $ dropWhile advanceCondition $ iterate (>>=advanceState) (Right (initState state inputs))
 
 runProgramTillNeedInput :: IntcodeState -> ComputeMonad IntcodeState
-runProgramTillNeedInput init_state = last $ U.takeWhileInclusive advanceConditionWaitInput $ iterate (>>=advanceState) (Right init_state)
+runProgramTillNeedInput init_state = head $ dropWhile advanceConditionWaitInput $ iterate (>>=advanceState) (Right init_state)
 
 runProgramDebug :: Int -> IntcodeInputs -> IntcodeProgram -> [ComputeMonad IntcodeState]
 runProgramDebug num_steps inputs state = take num_steps $ iterate (>>=advanceState) (Right (initState state inputs))
