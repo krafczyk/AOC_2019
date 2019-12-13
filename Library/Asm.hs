@@ -250,7 +250,7 @@ advanceConditionWaitInput (Right state) = if (opcode == 99) || ((opcode == 3) &&
 
 -- Run the program and get output if it terminates properly
 runProgram :: IntcodeInputs -> IntcodeProgram -> ComputeMonad IntcodeState
-runProgram inputs state = last $ U.takeWhileInclusive advanceCondition $ iterate (>>=advanceState) (Right (initState state inputs))
+runProgram inputs state = head $ dropWhile advanceCondition $ iterate (>>=advanceState) (Right (initState state inputs))
 
 runProgramTillNeedInput :: IntcodeState -> ComputeMonad IntcodeState
 runProgramTillNeedInput init_state = last $ U.takeWhileInclusive advanceConditionWaitInput $ iterate (>>=advanceState) (Right init_state)
