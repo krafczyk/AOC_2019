@@ -55,17 +55,21 @@ hasDependency recipe_book decendents parent
           children = let Just (_,cmap) = mcmap in (filter (\x -> Map.member x recipe_book) (Map.keys cmap))
           filt_chil = dropWhile (not . hasDependency recipe_book decendents) children
 
-expandStepHelper :: RecipeBook -> Map.Map String Int -> String -> Map.Map String Int
-expandStepHelper recipe_book init_state selected = Map.map (*num_need) result
+expandStepHelper :: RecipeBook -> Map.Map String Int -> String -> (Int, Map.Map String Int)
+expandStepHelper recipe_book init_state selected = (num_need*num_prod, Map.map (*num_need) result)
     where num_sel = init_state Map.! selected
           (num_prod, result) = recipe_book Map.! selected
           num_need = if (num_sel `mod` num_prod) == 0 then num_sel `div` num_prod else (num_sel `div` num_prod)+1
 
-expandStep :: RecipeBook -> Map.Map String Int -> Map.Map String Int
-expandStep recipe_book init_state
-    | null to_expand = init_state
-    | null with_deps = Map.delete no_dep (Map.unionWith (+) init_state (expandStepHelper recipe_book init_state no_dep))
-    | otherwise = Map.delete dep (Map.unionWith (+) init_state (expandStepHelper recipe_book init_state dep))
+expandStep :: RecipeBook -> (Map.Map String Int, [(String,Int)]) -> (Map.Map String Int, [(String,Int)])
+expandStep recipe_book (init_state, hist)
+    | null to_expand = (init_state, hist)
+    | null with_deps =
+        let (num_need, to_add) = expandStepHelper recipe_book init_state no_dep in
+        (Map.unionWith (+) (Map.delete no_dep init_state) to_add, hist ++ [(no_dep, num_need)])
+    | otherwise =
+        let (num_need, to_add) = expandStepHelper recipe_book init_state dep in
+        (Map.unionWith (+) (Map.delete dep init_state) to_add, hist ++ [(dep, num_need)])
     where to_expand_1 = Map.keys init_state
           to_expand = filter (\x -> Map.member x recipe_book) to_expand_1
           with_deps = filter (\x -> hasDependency recipe_book (delete x to_expand) x) to_expand
@@ -73,16 +77,37 @@ expandStep recipe_book init_state
           without_deps = foldr (\x acc -> if x `elem` with_deps then acc else x:acc) [] to_expand
           no_dep = head $ without_deps
 
+expandStep2 :: RecipeBook -> Map.Map String Int -> Map.Map String Int
+expandStep2 recipe_book init_state
+    | null to_expand = init_state
+    | otherwise = Map.unionWith (+) (Map.singleton sel (-num_prod*num_rounds)) (Map.unionWith (+) (Map.map (*num_rounds) recipe) init_state)
+    where to_expand = filter (\x -> Map.member x recipe_book) (Map.keys (Map.filter (\num -> num > 0) init_state))
+          sel = head $ to_expand
+          num_need = init_state Map.! sel
+          (num_prod, recipe) = recipe_book Map.! sel
+          num_rounds = if (num_need `mod` num_prod) == 0 then num_need `div` num_prod else (num_need `div` num_prod)+1
+
+continueCond :: RecipeBook -> Map.Map String Int -> Bool
+continueCond recipe_book state = not $ Map.null $ Map.filter (\num -> num > 0) $ valids
+    where valids = Map.filterWithKey (\name num -> Map.member name recipe_book) state
+    
+
 solveProblems :: RecipeBook -> IO ()
 solveProblems recipe_book =
     do
-    let start = Map.singleton "FUEL" 1
-        steps = U.takeWhileInclusive (\m -> Map.keys m /= ["ORE"]) $ iterate (expandStep recipe_book) start
-    mapM_ (putStrLn . show) steps
-    --let to_expand = filter (\x -> Map.member x recipe_book) $ Map.keys step
-    --print $ to_expand
-    --let with_deps = filter (\x -> hasDependency recipe_book (delete x to_expand) x) to_expand
-    --print $ with_deps
+    --let start :: (Map.Map String Int, [(String,Int)])
+    --    start = (Map.singleton "FUEL" 1, [])
+    --    steps = U.takeWhileInclusive (\(m, _) -> Map.keys m /= ["ORE"]) $ iterate (expandStep recipe_book) start
+    --mapM_ (putStrLn . show) steps
+    let start2 = Map.singleton "FUEL" 1
+        final = head $ dropWhile (continueCond recipe_book) $ iterate (expandStep2 recipe_book) start2
+        num_efficient_ore = final Map.! "ORE"
+    putStrLn $ "Task 1: " ++ (show $ final Map.! "ORE")
+    let trillion = 1000000000000
+        num_efficient_fuel = trillion `div` num_efficient_ore
+    putStrLn $ "First, produced " ++ (show num_efficient_fuel)
+    putStrLn $ "Remaining: " ++ (show $ trillion `mod` num_efficient_ore)
+    print $ Map.map (*num_efficient_fuel) final
 
 indexMap :: [((String, Int),[(String,Int)])] -> IO ()
 indexMap digested =
