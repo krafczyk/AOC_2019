@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <cmath>
 
 int mask[4] = {0, 1, 0, -1};
 
@@ -56,6 +57,15 @@ void task1(const std::vector<uint8_t>& in_msg) {
     std::cout << "Task 1: " << result.substr(0,8) << std::endl;
 }
 
+void task2(const std::vector<uint8_t>& in_msg) {
+    // Get offset
+    size_t offset = 0;
+    for (int i = 0; i < 7; i++) {
+        offset += ((size_t)in_msg[6-i])*((size_t)pow(10,i));
+    }
+    std::cout << "offset: " << offset << std::endl;
+}
+
 int main(int argc, char** argv) {
     std::string data_filepath = "data/day_16.txt";
     if (argc > 1) {
@@ -70,5 +80,6 @@ int main(int argc, char** argv) {
     }
     std::vector<uint8_t> msg_data = toMessageData(line);
     task1(msg_data);
+    task2(msg_data);
     return 0;
 }
