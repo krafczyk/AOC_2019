@@ -33,6 +33,7 @@ task1 state =
     do
     let output = Asm.getOutput state
         display = filter (\l -> not $ null l) $ lines $ map (chr) output
+    mapM_ (putStrLn) display
     putStrLn $ "Task 1: " ++ (show $ intAlignment display)
 
 fileHandler :: AP.ArgMap -> System.IO.Handle -> IO ()
