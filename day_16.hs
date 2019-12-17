@@ -3,7 +3,6 @@ import System.IO
 import qualified Data.Map as Map
 import qualified Library.ArgParser as AP
 import Data.Char
-import Control.DeepSeq
 
 argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use for input", 1) ]
 
@@ -11,10 +10,10 @@ base_pattern :: [Int]
 base_pattern = [0, 1, 0, -1]
 
 apply_pattern :: Int -> [Int] -> [Int]
-apply_pattern len input = foldr (\i acc -> ((abs $ foldr (\j v -> acc+((base_pattern !! (((j+1) `div` i) `mod` 4))*v) ) 0 (zip [0..] input)) `mod` 10):acc) [] (take len [1..])
+apply_pattern len input = foldr (\i acc -> ((abs $ foldr (\(j,v) acc1-> acc1+((base_pattern !! (((j+1) `div` i) `mod` 4))*v) ) 0 (zip [0..] input)) `mod` 10):acc) [] (take len [1..])
 
 run_patterns :: [Int] -> Int -> [Int]
-run_patterns message_data num = head $ drop num $ iterate (\x -> apply_pattern (length message_data) $ force x) message_data
+run_patterns message_data num = head $ drop num $ iterate (\x -> apply_pattern (length message_data) x) message_data
     --where masks = build_patterns (length message_data)
 
 get8Digits :: Int -> [Int] -> String
