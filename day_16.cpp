@@ -43,9 +43,13 @@ void iterateApp(std::vector<uint8_t>& res, std::vector<uint8_t>& in) {
     std::swap(in, res);
 }
 
-void iterateAppRepeat(std::vector<uint8_t>& res, std::vector<uint8_t>& in, size_t N) {
+void iterateAppRepeat(std::vector<uint8_t>& res, std::vector<uint8_t>& in, size_t N, bool report=false) {
     for (size_t i = 0; i < N; ++i) {
         iterateApp(res, in);
+        if(report) {
+            //std::cout << (i+1) << "\r" << std::flush;
+            std::cout << (i+1) << std::endl;
+        }
     }
 }
 
@@ -64,6 +68,17 @@ void task2(const std::vector<uint8_t>& in_msg) {
         offset += ((size_t)in_msg[6-i])*((size_t)pow(10,i));
     }
     std::cout << "offset: " << offset << std::endl;
+    // Expand message 10000 times.
+    std::vector<uint8_t> full_msg;
+    full_msg.reserve(10000*in_msg.size());
+    for(int i=0; i < 10000; ++i) {
+        full_msg.insert(full_msg.end(), in_msg.cbegin(), in_msg.cend());
+    }
+    std::vector<uint8_t> full_msg2;
+    full_msg2.reserve(full_msg.size());
+    iterateAppRepeat(full_msg2, full_msg, 100, true);
+    std::string result = toString(full_msg);
+    std::cout << "Task 2: " << result.substr(offset,8) << std::endl;
 }
 
 int main(int argc, char** argv) {
