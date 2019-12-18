@@ -34,12 +34,15 @@ task1 state =
     filter (\l -> not $ null l) $ lines $ map (chr) output
     where output = Asm.getOutput state
 
-data PathElement = TurnLeft | TurnRight | Forward Int deriving (Eq)
+data PathElement = TurnLeft | TurnRight | Forward Int | ProgA | ProgB | ProgC deriving (Eq, Ord) 
 
 instance Show PathElement where
     show TurnLeft = "L"
     show TurnRight = "R"
     show (Forward n) = (show n)
+    show ProgA = "A"
+    show ProgB = "B"
+    show ProgC = "C"
 
 data PathFindingState = PathFindingState { curDir :: Int,
                                            curPos :: (Int, Int),
@@ -144,12 +147,11 @@ numOccurances :: (Eq a) => [[a]] -> [a] -> Int
 numOccurances lists sublist =
     sum $ map (\l -> numOccurancesSingle l sublist) lists
 
-getBestSubseq :: (Eq a) => [a] -> [a]
+getBestSubseq :: (Eq a) => [[a]] -> [a]
 getBestSubseq to_digest =
     fst result
-    where init_list = [to_digest]
-          best_len = fst $ foldr1 (\(l,s) (ml,ms) -> if s > ms then (l,s) else (ml,ms)) $ foldr (\l1 acc -> (l1, l1*(maximum $ foldr (\subl acc1 -> (numOccurances init_list subl):acc1) [] (buildSubsets init_list l1))):acc) [] [2,4..20]
-          result = foldr (\(l,n) (ml,mn) -> if n > mn then (l,n) else (ml,mn)) ([],0) $ map (\sl -> (sl, numOccurances init_list sl)) (buildSubsets init_list best_len)
+    where best_len = fst $ foldr1 (\(l,s) (ml,ms) -> if s > ms then (l,s) else (ml,ms)) $ filter (\(l,lm) -> (lm `div` l) > 1) $ foldr (\l1 acc -> (l1, l1*(maximum $ foldr (\subl acc1 -> (numOccurances to_digest subl):acc1) [] (buildSubsets to_digest l1))):acc) [] [2,4..20]
+          result = foldr (\(l,n) (ml,mn) -> if n > mn then (l,n) else (ml,mn)) ([],0) $ map (\sl -> (sl, numOccurances to_digest sl)) (buildSubsets to_digest best_len)
 
 subseqLocations :: (Eq a) => [a] -> [a] -> [Int]
 subseqLocations list sublist =
@@ -157,6 +159,64 @@ subseqLocations list sublist =
     where l1 = length list
           l2 = length sublist
           num = l1-l2+1
+
+pairUp :: (Eq a) => [a] -> [(a,a)]
+pairUp [] = []
+pairUp [x] = []
+pairUp (x:y:xs) = (x,y):(pairUp xs)
+
+removeOccurancesSingle :: (Eq a) => [a] -> [a] -> [[a]]
+removeOccurancesSingle list sublist =
+    foldl (\acc (i,e) -> acc ++ [take (e-i) $ drop i list]) [] slices
+    where locs = subseqLocations list sublist
+          subl = length sublist
+          slices = filter (\(x,y) -> x /= y) $ pairUp $ reverse $ (length list):(foldl (\(p:acc) i -> ((locs !! i)+subl):(locs !! i):p:acc) [0] (take (length locs) [0..]))
+
+replaceOccurances :: (Eq a) => [a] -> [a] -> [a] -> [a]
+replaceOccurances list sublist replacement =
+    foldl (\acc (i,e) -> acc ++ (take (e-i) $ drop i list) ++ replacement) [] slices
+    where locs = subseqLocations list sublist
+          subl = length sublist
+          slices = pairUp $ reverse $ (length list):(foldl (\(p:acc) i -> ((locs !! i)+subl):(locs !! i):p:acc) [0] (take (length locs) [0..]))
+
+removeOccurances :: (Eq a) => [[a]] -> [a] -> [[a]]
+removeOccurances lists sublist =
+    foldl (\acc l -> acc ++ (removeOccurancesSingle l sublist)) [] lists
+
+buildSubPrograms :: [[PathElement]] -> Map.Map [PathElement] [PathElement]
+buildSubPrograms lists =
+    Map.fromList [([ProgA], aprog), ([ProgB], bprog), ([ProgC], cprog)]
+    where aprog = getBestSubseq lists 
+          new_step = removeOccurances lists aprog
+          bprog = getBestSubseq new_step
+          step_2 = removeOccurances new_step bprog
+          cprog = step_2 !! 0
+
+translateProgram :: [PathElement] -> Map.Map [PathElement] [PathElement] -> [PathElement]
+translateProgram list prog_map = 
+    foldl (\acc k -> replaceOccurances acc (prog_map Map.! k) k) list keys_sorted
+    where keys = Map.keys prog_map
+          keys_sorted = sortBy (\k1 k2 -> compare (length $ prog_map Map.! k1) (length $ prog_map Map.! k2)) keys
+
+-- [L,10,L,6,R,10,R,6,R,8,R,8,L,6,R,8,L,10,L,6,R,10,L,10,R,8,R,8,L,10,R,6,R,8,R,8,L,6,R,8,L,10,R,8,R,8,L,10,R,6,R,8,R,8,L,6,R,8,L,10,L,6,R,10,L,10,R,8,R,8,L,10,R,6,R,8,R,8,L,6,R,8]
+--R,6,R,8,R,8,L,6,R,8
+test_progs :: Map.Map [PathElement] [PathElement]
+test_progs = Map.fromList [([ProgA], [TurnLeft, Forward 10, TurnLeft , Forward 6, TurnRight, Forward 10, TurnRight, Forward 6]),
+                           ([ProgB], [TurnRight, Forward 6, TurnRight, Forward 8, TurnRight, Forward 8, TurnLeft, Forward 6, TurnRight, Forward 8])]
+
+express :: PathElement -> [Int]
+express TurnLeft = [ord 'L']
+express TurnRight = [ord 'R']
+express ProgA = [ord 'A']
+express ProgB = [ord 'B']
+express ProgC = [ord 'C']
+express (Forward n) = 
+    foldr (\i acc-> ((ord '0')+((n `div` (10^i)) `mod` 10)):acc) [] $ reverse $ take (m+1) [0..]
+    where m = head $ dropWhile (\p -> (n `div` 10^p) > 0) [0..]
+
+--produceProgram :: [PathElement] -> [Int]
+--produceProgram path = foldr1 (++) $ intersperse [[ord ',']] $ map (express) path
+produceProgram path = foldr1 (++) $ intersperse [ord ','] $ map (express) path
 
 fileHandler :: AP.ArgMap -> System.IO.Handle -> IO ()
 fileHandler argMap handle =
@@ -172,14 +232,13 @@ fileHandler argMap handle =
         found_path = reverse $ pathFinding display
     mapM_ (putStrLn) display
     print $ found_path
-    print $ length found_path
-    --let num = 18
-    --print $ buildSubsets found_path num
-    --print $ foldr (\subl acc -> ((numOccurances found_path subl):acc)) [] (buildSubsets found_path num)
-    --print $ length $ buildSubsets found_path num
-    --print $ foldr1 (\(l,s) (ml,ms) -> if s > ms then (l,s) else (ml,ms)) $ foldr (\l1 acc -> (l1, l1*(maximum $ foldr (\subl acc1 -> (numOccurances found_path subl):acc1) [] (buildSubsets found_path l1))):acc) [] [2,4..20]
-    print $ getBestSubseq found_path
-    print $ subseqLocations found_path $ getBestSubseq found_path
+    let subprogs = buildSubPrograms [found_path]
+    print $ subprogs
+    print $ translateProgram found_path subprogs
+    print $ translateProgram found_path test_progs
+    print $ (subprogs Map.! [ProgC])
+    print $ produceProgram (subprogs Map.! [ProgC])
+    --let program_2 = replaceNth 0 2 program
 
 handleFile :: String -> AP.ArgMap -> IO ()
 handleFile input_filepath argMap = withFile input_filepath ReadMode (fileHandler argMap)
