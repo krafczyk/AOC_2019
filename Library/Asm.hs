@@ -248,6 +248,12 @@ advanceConditionWaitInput (Right state) = if (opcode == 99) || ((opcode == 3) &&
           opmode = program !! idx
           opcode = getOpcode opmode
 
+isError :: ComputeMonad a -> Bool
+isError input =
+    case input of
+        Left _ -> True
+        Right _ -> False
+
 -- Run the program and get output if it terminates properly
 runProgram :: IntcodeInputs -> IntcodeProgram -> ComputeMonad IntcodeState
 runProgram inputs state = head $ dropWhile advanceCondition $ iterate (>>=advanceState) (Right (initState state inputs))
