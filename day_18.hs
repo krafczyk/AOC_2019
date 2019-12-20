@@ -91,9 +91,7 @@ buildDistMap st =
 shortestCollectDist :: CaveState -> Int
 shortestCollectDist st
     | Map.size keys_to_collect == 0 = 0
---    | Map.size keys_to_collect == 0 = []
     | otherwise = minimum $ foldr (\(pos,keyname) acc-> ((distMap Map.! pos)+(shortestCollectDist st { curPos=pos, items=Map.filter (\c -> (toLower c) /= keyname) it})):acc) [] reachable_keys
---    | otherwise = foldr (\(pos,keyname) acc-> ((distMap Map.! pos),st { curPos=pos, items=Map.filter (\c -> (toLower c) /= keyname) it}):acc) [] reachable_keys
     where it = items st
           keys_to_collect = Map.filter (\c -> isLower c) it
           distMap = buildDistMap st
