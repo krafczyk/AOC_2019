@@ -44,7 +44,7 @@ loadMapHelper :: ((Int,Int) -> Char) -> ((Int,Int)->(Int,Int)) -> (Int,Int) -> C
 loadMapHelper getter transformer p@(x1,y1) st
     | tile == '#' = st
     | tile == '@' = st { tunnels = Set.insert ((uncurry point) $ transformer p) init_tun,
-                         curPos = ((uncurry point) $ p) }
+                         curPos = ((uncurry point) $ transformer p) }
     | tile == '.' = st { tunnels = Set.insert ((uncurry point) $ transformer p) init_tun }
     | otherwise = st { tunnels = Set.insert ((uncurry point) $ transformer p) init_tun,
                        items = Map.insert ((uncurry point) $ transformer p) tile init_items }
@@ -88,15 +88,24 @@ buildDistMap st =
           dm = Map.singleton cP 0
           queue = filter (canExplore st) $ neighbors cP
 
+shortestCollectDist :: CaveState -> Int
+shortestCollectDist st
+    | Map.size keys_to_collect == 0 = 0
+--    | Map.size keys_to_collect == 0 = []
+    | otherwise = minimum $ foldr (\(pos,keyname) acc-> ((distMap Map.! pos)+(shortestCollectDist st { curPos=pos, items=Map.filter (\c -> (toLower c) /= keyname) it})):acc) [] reachable_keys
+--    | otherwise = foldr (\(pos,keyname) acc-> ((distMap Map.! pos),st { curPos=pos, items=Map.filter (\c -> (toLower c) /= keyname) it}):acc) [] reachable_keys
+    where it = items st
+          keys_to_collect = Map.filter (\c -> isLower c) it
+          distMap = buildDistMap st
+          reachable_keys = Map.toList (Map.filterWithKey (\p c -> p `elem` (Map.keys distMap)) keys_to_collect)
+
 fileHandler :: AP.ArgMap -> System.IO.Handle -> IO ()
 fileHandler argMap handle =
     do
     file_data <- hGetContents handle
     let map_data = lines file_data
         cave_state = loadMapData map_data
-    mapM_ (putStrLn) $ map_data
-    print $ cave_state
-    print $ buildDistMap cave_state
+    putStrLn $ "Task 1: " ++ (show $ shortestCollectDist cave_state)
 
 handleFile :: String -> AP.ArgMap -> IO ()
 handleFile input_filepath argMap = withFile input_filepath ReadMode (fileHandler argMap)
