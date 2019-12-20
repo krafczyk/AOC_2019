@@ -3,33 +3,44 @@ import System.IO
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Library.ArgParser as AP
+import Library.Vec
+import Library.Maze
 import Data.Char
 import Data.List
+import Data.Maybe
 
 argDefinitions = [ ("input_filepath", ["-i", "--input-file"], "Filepath to use for input", 1) ]
 
 data Point = Point { gX :: Int, gY :: Int } deriving (Eq, Ord)
 
-instance Show Point where
-    show p = "{" ++ (show $ gX p) ++ "," ++ (show $ gY p) ++ "}"
-
 point :: Int -> Int -> Point
 point x y = Point { gX=x, gY=y }
 
-add :: Point -> Point -> Point
-add a b = Point { gX=(a_x+b_x), gY=(a_y+b_y) }
-    where a_x = gX a
-          b_x = gX b
-          a_y = gY a
-          b_y = gY b
+instance Show Point where
+    show a = "{" ++ (show a_x) ++ "," ++ (show a_y) ++ "}"
+        where a_x = gX a
+              a_y = gY a
 
-neighbors :: Point -> [Point]
-neighbors p = [ p {gY=(p_y+1)},
-                p {gY=(p_y-1)},
-                p {gX=(p_x+1)},
-                p {gX=(p_x-1)} ]
-    where p_x = gX p
-          p_y = gY p
+instance VecI Point where
+    dist a b = abs(a_x-b_x)+abs(a_y-b_y)
+        where a_x = gX a
+              b_x = gX b
+              a_y = gY a
+              b_y = gY b
+    dot a b = (a_x*b_x)+(a_y*b_y)
+        where a_x = gX a
+              b_x = gX b
+              a_y = gY a
+              b_y = gY b
+    mag a = dist a a
+
+instance MappableI Point where
+    neighbors a = [ point a_x (a_y+1),
+                    point (a_x+1) a_y,
+                    point a_x (a_y-1),
+                    point (a_x-1) a_y ]
+        where a_x = gX a
+              a_y = gY a
 
 data CaveState = CaveState { tunnels :: Set.Set Point,
                              items :: Map.Map Point Char,
@@ -61,56 +72,73 @@ loadMapData map_data =
           indices = (\x y -> (x,y)) <$> [0..(w-1)] <*> [0..(h-1)]
           get = \(x,y) -> (map_data !! y) !! x
 
-canExplore :: CaveState -> Point -> Bool
-canExplore st p
-    | Set.notMember p tun = False
-    | not $ (p `elem` (Map.keys it)) = True
-    | isUpper (it Map.! p) = False
-    | otherwise = True
-    where tun = tunnels st
-          it = items st
+type MutMap = Map.Map Char (Map.Map Char Int)
 
-distMapIteration :: (Point -> Bool) -> (Map.Map Point Int, [Point]) -> (Map.Map Point Int, [Point])
-distMapIteration validator (dm, que) =
-    (new_dm, q1 ++ next_ns)
-    where q = head $ que
-          q1 = drop 1 que
-          from = head $ sortBy (\p1 p2 -> compare (dm Map.! p1) (dm Map.! p2)) $ filter (\p -> p `elem` (Map.keys dm)) $ filter (validator) $ neighbors q
-          from_d = dm Map.! from
-          new_dm = Map.insert q (from_d+1) dm
-          next_ns = filter (\p -> not $ p `elem` q1) $ filter (\p -> not $ (p `elem` (Map.keys new_dm))) $ filter (validator) $ neighbors q
+buildMutualMapsHelper :: Set.Set Point -> Map.Map Point Char -> Char -> MutMap -> MutMap
+buildMutualMapsHelper map its name acc =
+    Map.insert name dtopmap acc
+    where nits = Map.filter (\c -> c /= name) $ its
+          orig = fst $ head $ Map.toList $ Map.filter (\c -> c == name) $ its
+          dmap = distMap map orig
+          dtopmap = Map.foldrWithKey (\p c acc1 -> Map.insert c (dmap Map.! p) acc1) Map.empty nits
 
-buildDistMap :: CaveState -> Map.Map Point Int
-buildDistMap st =
-    fst $ head $ dropWhile (\s -> not $ null $ snd s) $ iterate (distMapIteration (canExplore st)) (dm, queue)
-    where tun = tunnels st
-          cP = curPos st
-          dm = Map.singleton cP 0
-          queue = filter (canExplore st) $ neighbors cP
+buildMutualMaps :: CaveState -> MutMap
+buildMutualMaps cs =
+    foldr (buildMutualMapsHelper (tunnels cs) its) Map.empty it_names
+    where its = Map.insert (curPos cs) '@' (items cs)
+          it_names = Set.toList $ Map.foldr (\c acc -> Set.insert c acc) Set.empty (its)
 
-bDistMapImp :: Set.Set Point -> (Map.Map Point Int, [Point]) -> (Map.Map Point Int, [Point])
-bDistMapImp map (visited, queue) =
-    (newVis, newQue)
-    where next = head $ queue
-          q1 = drop 1 queue
-          from = head $ sortBy (\p1 p2 -> compare (visited Map.! p1) (visited Map.! p2)) $ filter (\p -> p `elem` (Map.keys visited)) $ filter (\p -> Set.member p map) $ neighbors next
-          newVis = Map.insert next ((visited Map.! from)+1) visited
-          n_neighbors = filter (\p -> not $ (p `elem` q1)) $ filter (\p -> not $ (p `elem` (Map.keys newVis))) $ filter (\p -> Set.member p map) $ neighbors next
-          newQue = q1 ++ n_neighbors
+getDist :: MutMap -> Char -> Char -> Int
+getDist mm a b = (mm Map.! a) Map.! b
 
-bDistMap :: Set.Set Point -> Point -> Map.Map Point Char -> Map.Map Char Int
-bDistMap map orig points_of_interest =
-    Map.foldrWithKey (\p c acc -> Map.insert c (fullMap Map.! p) acc) Map.empty points_of_interest
-    where fullMap = fst $ bDistMapImp map (Map.singleton orig 0, filter (\p -> Set.member p map) $ neighbors orig)
+--data MapTree = MapTree { keys :: String, doorDeps :: Map.Map Char MapTree } deriving (Show)
 
-shortestCollectDist :: CaveState -> Int
-shortestCollectDist st
-    | Map.size keys_to_collect == 0 = 0
-    | otherwise = minimum $ foldr (\(pos,keyname) acc-> ((distMap Map.! pos)+(shortestCollectDist st { curPos=pos, items=Map.filter (\c -> (toLower c) /= keyname) it})):acc) [] reachable_keys
-    where it = items st
-          keys_to_collect = Map.filter (\c -> isLower c) it
-          distMap = buildDistMap st
-          reachable_keys = Map.toList (Map.filterWithKey (\p c -> p `elem` (Map.keys distMap)) keys_to_collect)
+data MapSegment = MapSegment { keys :: [Char], doors :: [Char], segmap :: Set.Set Point } deriving (Show, Eq)
+
+type MazeMap = [MapSegment]
+
+buildMapSegment :: CaveState -> Point -> MapSegment
+buildMapSegment cs orig =
+    MapSegment { keys=rkeys, doors=border_doors, segmap=Set.fromList (Map.keys dMap) }
+    where doors = Map.filter (isUpper) (items cs)
+          dMap = distMapBy (\p -> Map.notMember p doors) (tunnels cs) orig
+          rkeys = Map.elems $ Map.filterWithKey (\p c -> Map.member p dMap) $ Map.filter (isLower) (items cs)
+          border_doors = Map.elems $ Map.filterWithKey (\p d -> (not $ null $ filter (\p -> Map.member p dMap) $ neighbors p)) doors
+
+isCovered :: [MapSegment] -> Point -> Bool
+isCovered segments p =
+    foldr (||) False $ map (\seg -> Set.member p (segmap seg)) segments
+
+buildMapSegmentsImp :: CaveState -> ([MapSegment], Set.Set Point) -> ([MapSegment], Set.Set Point)
+buildMapSegmentsImp cs (m,rem)
+    | rem == Set.empty = (m,rem)
+    | otherwise = (newm, rem2)
+    where next = Set.elemAt 0 rem
+          newseg = buildMapSegment cs next
+          newm = (newseg:m)
+          rem2 = Set.filter (not . isCovered newm) rem
+
+buildMapSegments :: CaveState -> MazeMap
+buildMapSegments cs =
+    fst $ head $ dropWhile (\(_,rem) -> not $ Set.null rem) $ iterate (buildMapSegmentsImp cs) ([],init_tunnels)
+    where doors = Map.filter (isUpper) (items cs) -- All door items
+          init_tunnels = Set.filter (\p -> Map.notMember p doors) (tunnels cs) -- All tunnels not under a door.
+
+rootSegment :: CaveState -> MazeMap -> Maybe MapSegment
+rootSegment cs segs
+    | null state = Nothing
+    | otherwise = Just (head state)
+    where orig = (curPos cs)
+          state = filter (\seg -> Set.member orig (segmap seg)) segs
+
+data MazeSearchState = MazeSearchState { master_map :: MutMap, all_segs :: MazeMap, acquired_keys :: Set.Set Char, reachable_segs :: MazeMap } deriving (Show)
+
+initMazeSearchState :: CaveState -> MazeSearchState
+initMazeSearchState cs =
+    MazeSearchState { master_map=mas_map, all_segs=all_seg, acquired_keys=Set.empty, reachable_segs=[init_seg] }
+    where all_seg = buildMapSegments cs
+          mas_map = buildMutualMaps cs
+          init_seg = fromJust $ rootSegment cs all_seg
 
 fileHandler :: AP.ArgMap -> System.IO.Handle -> IO ()
 fileHandler argMap handle =
@@ -118,7 +146,19 @@ fileHandler argMap handle =
     file_data <- hGetContents handle
     let map_data = lines file_data
         cave_state = loadMapData map_data
-    putStrLn $ "Task 1: " ++ (show $ shortestCollectDist cave_state)
+        maze_map = buildMapSegments cave_state
+        init_seg = fromJust $ rootSegment cave_state maze_map
+    mapM_ (putStrLn) map_data
+    --print $ cave_state
+    --print $ distMap (tunnels cave_state) (curPos cave_state)
+    --print $ distMapBy (\p -> Map.notMember p doors) (tunnels cave_state) (curPos cave_state)
+    --print $ buildMutualMaps cave_state
+    --print $ findBorderDoorsRkeys cave_state (curPos cave_state) ""
+    --print $ buildMapSegment cave_state (curPos cave_state)
+    --print $ buildMapSegments cave_state
+    --print $ rootSegment cave_state $ buildMapSegments cave_state
+    print $ initMazeSearchState cave_state
+    --putStrLn $ "Task 1: " ++ (show $ shortestCollectDist cave_state)
 
 handleFile :: String -> AP.ArgMap -> IO ()
 handleFile input_filepath argMap = withFile input_filepath ReadMode (fileHandler argMap)
