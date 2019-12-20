@@ -88,6 +88,21 @@ buildDistMap st =
           dm = Map.singleton cP 0
           queue = filter (canExplore st) $ neighbors cP
 
+bDistMapImp :: Set.Set Point -> (Map.Map Point Int, [Point]) -> (Map.Map Point Int, [Point])
+bDistMapImp map (visited, queue) =
+    (newVis, newQue)
+    where next = head $ queue
+          q1 = drop 1 queue
+          from = head $ sortBy (\p1 p2 -> compare (visited Map.! p1) (visited Map.! p2)) $ filter (\p -> p `elem` (Map.keys visited)) $ filter (\p -> Set.member p map) $ neighbors next
+          newVis = Map.insert next ((visited Map.! from)+1) visited
+          n_neighbors = filter (\p -> not $ (p `elem` q1)) $ filter (\p -> not $ (p `elem` (Map.keys newVis))) $ filter (\p -> Set.member p map) $ neighbors next
+          newQue = q1 ++ n_neighbors
+
+bDistMap :: Set.Set Point -> Point -> Map.Map Point Char -> Map.Map Char Int
+bDistMap map orig points_of_interest =
+    Map.foldrWithKey (\p c acc -> Map.insert c (fullMap Map.! p) acc) Map.empty points_of_interest
+    where fullMap = fst $ bDistMapImp map (Map.singleton orig 0, filter (\p -> Set.member p map) $ neighbors orig)
+
 shortestCollectDist :: CaveState -> Int
 shortestCollectDist st
     | Map.size keys_to_collect == 0 = 0
